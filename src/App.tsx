@@ -1,8 +1,47 @@
-import { Box, Input, Text, Container, VStack, Card, CardBody, Heading, Badge } from "@chakra-ui/react";
-import { useState } from "react";
+import { Box, Input, Text, Container, VStack, Card, CardBody, Heading, Badge, Button, Alert, AlertIcon, Flex } from "@chakra-ui/react";
+import { useState, useEffect } from "react";
 
 const App = () => {
   const [searchText, setSearchText] = useState<string>("");
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+
+  useEffect(() => {
+    // Detectar mudanças de conectividade
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Detectar quando o PWA pode ser instalado
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      
+      if (outcome === 'accepted') {
+        setShowInstallPrompt(false);
+        setDeferredPrompt(null);
+      }
+    }
+  };
 
   const musicas = [
     {
@@ -830,6 +869,42 @@ Preciso de Ti`,
     >
       <Container maxW={"6xl"} centerContent>
         <VStack spacing={8} width="100%">
+          {/* Banner de Instalação PWA */}
+          {showInstallPrompt && (
+            <Alert status="info" borderRadius="xl" boxShadow="md">
+              <AlertIcon />
+              <Box flex="1">
+                <Text fontWeight="semibold">
+                  Instale o app no seu dispositivo!
+                </Text>
+                <Text fontSize="sm">
+                  Tenha acesso rápido e funcione offline
+                </Text>
+              </Box>
+              <Button
+                size="sm"
+                colorScheme="purple"
+                onClick={handleInstallClick}
+                ml={2}
+              >
+                Instalar
+              </Button>
+            </Alert>
+          )}
+
+          {/* Indicador de Status da Conexão */}
+          <Flex justify="center" width="100%">
+            <Badge
+              colorScheme={isOnline ? "green" : "red"}
+              fontSize="xs"
+              px={3}
+              py={1}
+              borderRadius="full"
+            >
+              {isOnline ? "🌐 Online" : "⚡ Modo Offline"}
+            </Badge>
+          </Flex>
+
           {/* Header */}
           <VStack spacing={4} textAlign="center">
             <Heading
@@ -844,6 +919,11 @@ Preciso de Ti`,
             <Text color="gray.600" fontSize="lg">
               Encontre as letras das suas músicas favoritas
             </Text>
+            {!isOnline && (
+              <Text color="orange.500" fontSize="sm" fontStyle="italic">
+                Funcionando offline - todas as músicas disponíveis!
+              </Text>
+            )}
           </VStack>
 
           {/* Search Box */}

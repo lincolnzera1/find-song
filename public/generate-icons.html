@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gerador de Ícones PWA</title>
+</head>
+<body>
+    <canvas id="canvas" style="display: none;"></canvas>
+    <div id="icons"></div>
+    
+    <script>
+    const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const iconsContainer = document.getElementById('icons');
+
+    function createIcon(size) {
+        canvas.width = size;
+        canvas.height = size;
+        
+        // Fundo gradiente roxo/rosa
+        const gradient = ctx.createLinearGradient(0, 0, size, size);
+        gradient.addColorStop(0, '#805AD5');
+        gradient.addColorStop(1, '#ED64A6');
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+        
+        // Desenhar nota musical
+        ctx.fillStyle = 'white';
+        const noteSize = size * 0.6;
+        const centerX = size / 2;
+        const centerY = size / 2;
+        
+        // Círculo da nota
+        ctx.beginPath();
+        ctx.arc(centerX - noteSize/4, centerY + noteSize/4, noteSize/8, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Haste da nota
+        ctx.fillRect(centerX + noteSize/8, centerY - noteSize/4, noteSize/20, noteSize/2);
+        
+        // Bandeira da nota
+        ctx.beginPath();
+        ctx.moveTo(centerX + noteSize/8 + noteSize/20, centerY - noteSize/4);
+        ctx.quadraticCurveTo(centerX + noteSize/3, centerY - noteSize/6, centerX + noteSize/4, centerY);
+        ctx.lineTo(centerX + noteSize/8 + noteSize/20, centerY - noteSize/8);
+        ctx.fill();
+        
+        // Converter para PNG
+        canvas.toBlob((blob) => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `icon-${size}x${size}.png`;
+            link.textContent = `Baixar ícone ${size}x${size}`;
+            link.style.display = 'block';
+            link.style.margin = '5px 0';
+            iconsContainer.appendChild(link);
+        });
+    }
+    
+    // Gerar todos os tamanhos
+    sizes.forEach(size => createIcon(size));
+    
+    // Adicionar instruções
+    const instructions = document.createElement('div');
+    instructions.innerHTML = `
+        <h2>Instruções:</h2>
+        <p>1. Clique em cada link para baixar os ícones</p>
+        <p>2. Salve todos os ícones na pasta public/ do seu projeto</p>
+        <p>3. Os ícones serão usados automaticamente pelo PWA</p>
+    `;
+    instructions.style.marginTop = '20px';
+    instructions.style.padding = '20px';
+    instructions.style.border = '1px solid #ccc';
+    instructions.style.borderRadius = '5px';
+    document.body.appendChild(instructions);
+    </script>
+</body>
+</html>
