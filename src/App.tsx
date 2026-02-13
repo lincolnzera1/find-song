@@ -1,5 +1,5 @@
-import { Box, Input, Text, InputGroup, Container, VStack, Card, CardBody, Heading, Badge } from "@chakra-ui/react";
-import React, { useState } from "react";
+import { Box, Input, Text, Container, VStack, Card, CardBody, Heading, Badge } from "@chakra-ui/react";
+import { useState } from "react";
 
 const App = () => {
   const [searchText, setSearchText] = useState<string>("");
