@@ -1,29 +1,20 @@
 const CACHE_NAME = 'letras-musica-v1';
-const urlsToCache = [
-  '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css', 
-  '/manifest.json',
-  '/icon-192x192.png',
-  '/icon-512x512.png'
-];
 
-// Instalar Service Worker e cachear recursos
-self.addEventListener('install', (event) => {
+// Instalar Service Worker
+globalThis.addEventListener('install', (event) => {
+  console.log('Service Worker instalando...');
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Cache aberto');
-        return cache.addAll([
-          '/',
-          '/manifest.json'
-        ]);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('Cache criado');
+      return cache.addAll(['/']);
+    })
   );
+  globalThis.skipWaiting();
 });
 
-// Ativar Service Worker e limpar caches antigos  
-self.addEventListener('activate', (event) => {
+// Ativar Service Worker  
+globalThis.addEventListener('activate', (event) => {
+  console.log('Service Worker ativando...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -35,45 +26,24 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
+  globalThis.clients.claim();
 });
 
-// Interceptar requisições e servir do cache
-self.addEventListener('fetch', (event) => {
+// Interceptar requisições
+globalThis.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Se está no cache, retorna do cache
-        if (response) {
-          return response;
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request).then((response) => {
+        if (response.status === 200) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
         }
-
-        // Se não está no cache, busca da rede
-        return fetch(event.request).then((response) => {
-          // Verifica se a resposta é válida
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
-          }
-
-          // Clona a resposta
-          const responseToCache = response.clone();
-
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-
-          return response;
-        }).catch(() => {
-          // Se falhar e for uma navegação, retorna a página offline
-          if (event.request.destination === 'document') {
-            return caches.match('/');
-          }
-        });
-      })
+        return response;
+      });
+    }).catch(() => {
+      return caches.match('/');
+    })
   );
-});
-
-// Mostrar notificação quando o app for instalado
-self.addEventListener('beforeinstallprompt', (event) => {
-  console.log('PWA pode ser instalado');
 });

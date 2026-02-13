@@ -1,45 +1,120 @@
 import { Box, Input, Text, Container, VStack, Card, CardBody, Heading, Badge, Button, Alert, AlertIcon, Flex } from "@chakra-ui/react";
 import { useState, useEffect } from "react";
 
+// Interface para o prompt de instalação PWA
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  prompt(): Promise<void>;
+  readonly userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
+// Interface para navigator com standalone
+interface NavigatorWithStandalone extends Navigator {
+  standalone?: boolean;
+}
+
 const App = () => {
   const [searchText, setSearchText] = useState<string>("");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(() => {
+    // Inicializar no estado inicial para evitar setState em useEffect
+    return globalThis.matchMedia('(display-mode: standalone)').matches ||
+           (globalThis.navigator as NavigatorWithStandalone).standalone ||
+           document.referrer.includes('android-app://');
+  });
 
   useEffect(() => {
     // Detectar mudanças de conectividade
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    globalThis.addEventListener('online', handleOnline);
+    globalThis.addEventListener('offline', handleOffline);
 
     // Detectar quando o PWA pode ser instalado
     const handleBeforeInstallPrompt = (e: Event) => {
+      console.log('Event beforeinstallprompt disparado');
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
       setShowInstallPrompt(true);
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    // Listener para Windows/Android 
+    globalThis.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    
+    // Para iOS Safari - detectar se pode ser salvo (usando timeout para evitar setState síncrono)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isInStandaloneMode = (globalThis.navigator as NavigatorWithStandalone).standalone;
+    
+    if (isIOS && !isInStandaloneMode) {
+      console.log('iOS detectado - mostrando opção de instalação');
+      setTimeout(() => setShowInstallPrompt(true), 0);
+    }
+
+    // Detectar mudanças no status de instalação
+    const mediaQuery = globalThis.matchMedia('(display-mode: standalone)');
+    const handleDisplayModeChange = (e: MediaQueryListEvent) => {
+      setIsInstalled(e.matches || 
+                    (globalThis.navigator as NavigatorWithStandalone).standalone ||
+                    document.referrer.includes('android-app://'));
+    };
+    
+    mediaQuery.addEventListener('change', handleDisplayModeChange);
+
+    // Registrar Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('SW registrado com sucesso:', registration);
+        })
+        .catch((error) => {
+          console.error('SW falha no registro:', error);
+        });
+    }
     
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      globalThis.removeEventListener('online', handleOnline);
+      globalThis.removeEventListener('offline', handleOffline);
+      globalThis.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      mediaQuery.removeEventListener('change', handleDisplayModeChange);
     };
   }, []);
 
   const handleInstallClick = async () => {
+    console.log('Botão instalar clicado');
+    
     if (deferredPrompt) {
+      console.log('Usando deferredPrompt');
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
+      console.log('Resultado:', outcome);
       
       if (outcome === 'accepted') {
         setShowInstallPrompt(false);
         setDeferredPrompt(null);
+        setIsInstalled(true);
       }
+    } else {
+      // Instruções específicas por plataforma
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isChrome = /Chrome/.test(navigator.userAgent);
+      const isEdge = /Edg/.test(navigator.userAgent);
+      
+      let instructions = '';
+      
+      if (isIOS) {
+        instructions = 'Para instalar no iOS:\n\n1. Toque no botão "Compartilhar" (📤)\n2. Role para baixo e toque em "Adicionar à Tela de Início"\n3. Toque em "Adicionar"';
+      } else if (isChrome) {
+        instructions = 'Para instalar no Chrome:\n\n1. Clique nos 3 pontos (⋮) no canto superior direito\n2. Clique em "Instalar aplicativo"\n3. Clique em "Instalar"';
+      } else if (isEdge) {
+        instructions = 'Para instalar no Edge:\n\n1. Clique nos 3 pontos (...) no canto superior direito\n2. Clique em "Aplicativos" → "Instalar este site como aplicativo"\n3. Clique em "Instalar"';
+      } else {
+        instructions = 'Para instalar:\n\n• Chrome/Edge: Menu (⋮) → "Instalar aplicativo"\n• Firefox: Menu → "Instalar"\n• Mobile: Menu do navegador → "Adicionar à tela inicial"';
+      }
+      
+      alert(instructions);
     }
   };
 
@@ -869,6 +944,52 @@ Preciso de Ti`,
     >
       <Container maxW={"6xl"} centerContent>
         <VStack spacing={8} width="100%">
+          {/* Card de Instalação PWA */}
+          {!isInstalled && (
+            <Card
+              width="100%"
+              maxW="md"
+              boxShadow="lg"
+              borderRadius="xl"
+              bg="gradient"
+              bgGradient="linear(to-r, purple.500, pink.500)"
+              color="white"
+              textAlign="center"
+            >
+              <CardBody p={4}>
+                <VStack spacing={3}>
+                  <Text fontSize="lg" fontWeight="bold">
+                    📱 Instale como App
+                  </Text>
+                  <Text fontSize="sm" opacity={0.9}>
+                    Acesso rápido, funciona offline e sem ocupar espaço no navegador!
+                  </Text>
+                  <Button
+                    colorScheme="whiteAlpha"
+                    size="sm"
+                    onClick={handleInstallClick}
+                  >
+                    Instalar Agora
+                  </Button>
+                </VStack>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Mensagem para App Instalado */}
+          {isInstalled && (
+            <Alert status="success" borderRadius="xl" maxW="md">
+              <AlertIcon />
+              <Box>
+                <Text fontWeight="semibold">
+                  🎉 App Instalado com Sucesso!
+                </Text>
+                <Text fontSize="sm">
+                  Você está usando a versão instalada do app
+                </Text>
+              </Box>
+            </Alert>
+          )}
           {/* Banner de Instalação PWA */}
           {showInstallPrompt && (
             <Alert status="info" borderRadius="xl" boxShadow="md">
@@ -893,7 +1014,7 @@ Preciso de Ti`,
           )}
 
           {/* Indicador de Status da Conexão */}
-          <Flex justify="center" width="100%">
+          <Flex justify="space-between" alignItems="center" width="100%" maxW="md">
             <Badge
               colorScheme={isOnline ? "green" : "red"}
               fontSize="xs"
@@ -903,6 +1024,19 @@ Preciso de Ti`,
             >
               {isOnline ? "🌐 Online" : "⚡ Modo Offline"}
             </Badge>
+            
+            {/* Botão de Instalação Sempre Visível */}
+            {!isInstalled && (
+              <Button
+                size="sm"
+                colorScheme="purple"
+                variant="outline"
+                onClick={handleInstallClick}
+                leftIcon={<Text>📱</Text>}
+              >
+                Instalar App
+              </Button>
+            )}
           </Flex>
 
           {/* Header */}
@@ -960,9 +1094,9 @@ Preciso de Ti`,
 
           {/* Music Cards */}
           <VStack spacing={6} width="100%">
-            {filteredMusicas.map((musica, index) => (
+            {filteredMusicas.map((musica) => (
               <Card
-                key={index}
+                key={`${musica.title}-${musica.song.slice(0, 50)}`}
                 width="100%"
                 maxW="4xl"
                 boxShadow="lg"
